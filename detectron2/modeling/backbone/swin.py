@@ -19,6 +19,9 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 
 from detectron2.modeling.backbone.backbone import Backbone
+from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
+from detectron2.modeling.backbone.fpn import FPN, LastLevelMaxPool, LastLevelP6P7
+from detectron2.layers import ShapeSpec
 
 _to_2tuple = nn.modules.utils._ntuple(2)
 
@@ -693,3 +696,56 @@ class SwinTransformer(Backbone):
                 outs["p{}".format(i)] = out
 
         return outs
+    
+@BACKBONE_REGISTRY.register()
+def build_swint_backbone(cfg, input_shape):
+    """
+    Create a SwinT instance from config.
+
+    Returns:
+        VoVNet: a :class:`VoVNet` instance.
+    """
+    out_features = cfg.MODEL.SWINT.OUT_FEATURES
+
+    return SwinTransformer(
+        patch_size=4,
+        in_chans=input_shape.channels,
+        embed_dim=cfg.MODEL.SWINT.EMBED_DIM,
+        depths=cfg.MODEL.SWINT.DEPTHS,
+        num_heads=cfg.MODEL.SWINT.NUM_HEADS,
+        window_size=cfg.MODEL.SWINT.WINDOW_SIZE,
+        mlp_ratio=cfg.MODEL.SWINT.MLP_RATIO,
+        qkv_bias=True,
+        qk_scale=None,
+        drop_rate=0.,
+        attn_drop_rate=0.,
+        drop_path_rate=cfg.MODEL.SWINT.DROP_PATH_RATE,
+        norm_layer=nn.LayerNorm,
+        ape=cfg.MODEL.SWINT.APE,
+        patch_norm=True,
+        frozen_stages=cfg.MODEL.BACKBONE.FREEZE_AT,
+        out_features=out_features
+    )
+
+
+@BACKBONE_REGISTRY.register()
+def build_swint_fpn_backbone(cfg, input_shape: ShapeSpec):
+    """
+    Args:
+        cfg: a detectron2 CfgNode
+
+    Returns:
+        backbone (Backbone): backbone module, must be a subclass of :class:`Backbone`.
+    """
+    bottom_up = build_swint_backbone(cfg, input_shape)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    out_channels = cfg.MODEL.FPN.OUT_CHANNELS
+    backbone = FPN(
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=out_channels,
+        norm=cfg.MODEL.FPN.NORM,
+        top_block=LastLevelMaxPool(),
+        fuse_type=cfg.MODEL.FPN.FUSE_TYPE,
+    )
+    return backbone
