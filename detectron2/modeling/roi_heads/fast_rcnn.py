@@ -311,6 +311,7 @@ class FastRCNNOutputLayers(nn.Module):
         pt = torch.exp(-logpt)
 
         # compute the loss
+        reduced_threshold = None
         if reduced_threshold is None:
             focal_term = (1.0 - pt).pow(gamma)
         else:
@@ -322,9 +323,9 @@ class FastRCNNOutputLayers(nn.Module):
         if alpha is not None:
             loss *= alpha * target + (1 - alpha) * (1 - target)
 
-        if normalized:
-            norm_factor = focal_term.sum().clamp_min(eps)
-            loss /= norm_factor
+#         if normalized:
+#             norm_factor = focal_term.sum().clamp_min(eps)
+#             loss /= norm_factor
 
         if reduction == "mean":
             loss = loss.mean()
