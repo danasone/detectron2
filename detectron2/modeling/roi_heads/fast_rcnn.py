@@ -303,6 +303,39 @@ class FastRCNNOutputLayers(nn.Module):
         scores = self.cls_score(x)
         proposal_deltas = self.bbox_pred(x)
         return scores, proposal_deltas
+    
+    def focal_loss(self, output, target, gamma = 2.0, alpha = 0.25, reduction = "mean"):
+        target = target.view(-1)
+        output = output.view(-1)
+        target = target.type(output.type())
+
+        logpt = F.binary_cross_entropy_with_logits(output, target, reduction="none")
+        pt = torch.exp(-logpt)
+
+        # compute the loss
+        if reduced_threshold is None:
+            focal_term = (1.0 - pt).pow(gamma)
+        else:
+            focal_term = ((1.0 - pt) / reduced_threshold).pow(gamma)
+            focal_term[pt < reduced_threshold] = 1
+
+        loss = focal_term * logpt
+
+        if alpha is not None:
+            loss *= alpha * target + (1 - alpha) * (1 - target)
+
+        if normalized:
+            norm_factor = focal_term.sum().clamp_min(eps)
+            loss /= norm_factor
+
+        if reduction == "mean":
+            loss = loss.mean()
+        if reduction == "sum":
+            loss = loss.sum()
+        if reduction == "batchwise_mean":
+            loss = loss.sum(0)
+
+        return loss
 
     def losses(self, predictions, proposals):
         """
@@ -339,9 +372,11 @@ class FastRCNNOutputLayers(nn.Module):
             proposal_boxes = gt_boxes = torch.empty((0, 4), device=proposal_deltas.device)
 
         if self.use_sigmoid_ce:
-            loss_cls = self.sigmoid_cross_entropy_loss(scores, gt_classes)
+            #loss_cls = self.sigmoid_cross_entropy_loss(scores, gt_classes)
+            pass
         else:
-            loss_cls = cross_entropy(scores, gt_classes, reduction="mean")
+            #loss_cls = cross_entropy(scores, gt_classes, reduction="mean")
+            loss_cls = self.focal_loss(scores, gt_classes)
 
         losses = {
             "loss_cls": loss_cls,
