@@ -304,9 +304,7 @@ class FastRCNNOutputLayers(nn.Module):
         proposal_deltas = self.bbox_pred(x)
         return scores, proposal_deltas
     
-    def focal_loss(self, output, target, gamma = 2.0, alpha = 0.25, reduction = "mean"):
-        target = target.view(-1)
-        output = output.view(-1)
+    def calc_focal_loss(self, output, target, gamma = 2.0, alpha = 0.25, reduction = "mean"):
         target = target.type(output.type())
 
         logpt = F.binary_cross_entropy_with_logits(output, target, reduction="none")
@@ -334,7 +332,19 @@ class FastRCNNOutputLayers(nn.Module):
             loss = loss.sum()
         if reduction == "batchwise_mean":
             loss = loss.sum(0)
+        return loss
 
+    
+    def focal_loss(self, y_pred, y_true):
+        num_classes = y_pred.size(1)
+        loss = 0
+        
+        for cls in range(num_classes):
+            cls_y_true = (y_true == cls).long()
+            cls_y_pred = y_pred[:, cls, ...]
+
+            loss += self.calc_focal_loss(cls_y_pred, cls_y_true)
+        
         return loss
 
     def losses(self, predictions, proposals):
