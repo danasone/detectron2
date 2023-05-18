@@ -387,7 +387,7 @@ class FastRCNNOutputLayers(nn.Module):
             pass
         else:
             #loss_cls = cross_entropy(scores, gt_classes, reduction="mean")
-            loss_cls = self.focal_loss(scores, gt_classes)
+            loss_cls = cross_entropy(scores, gt_classes, reduction="mean") + self.focal_loss(scores, gt_classes)
 
         losses = {
             "loss_cls": loss_cls,
